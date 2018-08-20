@@ -206,6 +206,10 @@ mung.write = function write (fn, options = {}) {
         }
 
         res.write = write_hook;
+        res.send = (...args) => {
+          write_hook(...args)
+          res.end()
+        }
 
         next && next();
     }
