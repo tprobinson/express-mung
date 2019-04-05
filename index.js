@@ -12,6 +12,7 @@ mung.onError = (err, req, res) => {
         .status(500)
         .set('content-language', 'en')
         .json({ message: err.message })
+    res
         .end();
     return res;
 };
@@ -209,6 +210,65 @@ mung.write = function write (fn, options = {}) {
         res.send = (...args) => {
           write_hook(...args)
           res.end()
+        }
+
+        next && next();
+    }
+}
+
+
+mung.writeAsync = function write (fn, options = {}) {
+    return function (req, res, next) {
+        let original = res.write;
+        const mungError = options.mungError;
+
+        function write_async_hook (chunk, encoding, callback) {
+          return new Promise((resolve, reject) => {
+            // If res.end has already been called, do nothing.
+            if (res.finished) {
+                return false;
+            }
+
+            // Do not mung on errors
+            if (!mungError && res.statusCode >= 400) {
+                return original.apply(res, arguments);
+            }
+
+            try {
+                fn(chunk,
+                // Since `encoding` is an optional argument to `res.write`,
+                // make sure it is a string and not actually the callback.
+                typeof encoding === 'string' ? encoding : null,
+                req,
+                res)
+                .then(modifiedChunk => {
+                    if (res.headersSent)
+                        return;
+
+                        // If no returned value from fn, then set it back to the original value
+                        if (modifiedChunk === undefined) {
+                            modifiedChunk = chunk;
+                        }
+
+                      resolve(original.call(res, modifiedChunk, encoding, callback))
+                })
+                .catch(e => mung.onError(e, req, res));
+            } catch (e) {
+                mung.onError(e, req, res);
+            }
+          })
+
+
+
+
+
+
+          return faux_fin;
+        }
+
+        res.write = write_async_hook;
+        res.send = (...args) => {
+          write_async_hook(...args).then(() => res.end())
         }
 
         next && next();
