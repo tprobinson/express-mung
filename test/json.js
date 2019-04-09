@@ -1,186 +1,182 @@
-'use strict';
+const should = require('should') // eslint-disable-line no-unused-vars
+const express = require('express')
+const request = require('supertest')
+const mung = require('../')
 
-let should = require('should'),
-    express = require('express'),
-    request = require('supertest'),
-    mung = require('../');
-
-describe ('mung json', () => {
-
+describe('mung json', function() {
     function noop (json, req, res) {
     }
-  
+
     function inspect (json, req, res) {
         json.inspected_by = 'me'
     }
 
     function remove (json, req, res) {
-        return null;
+        return null
     }
 
     function reduce (json, req, res) {
-        return json.a;
+        return json.a
     }
-  
+
     function life (json, req, res) {
-        return 42;
+        return 42
     }
 
     function error(json, req, res) {
-        json.foo.bar.hopefully.fails();
+        json.foo.bar.hopefully.fails()
     }
 
-    it('should return the munged JSON result', done => {
+    it('should return the munged JSON result', function(done) {
         let server = express()
             .use(mung.json(inspect))
-            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end());
+            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end())
         request(server)
             .get('/')
             .expect(200)
             .expect(res => {
-                let expected = {a : 'a', 'inspected_by': 'me'};
-                res.body.should.eql(expected);
+                let expected = {a: 'a', 'inspected_by': 'me'}
+                res.body.should.eql(expected)
                 res.headers['content-length'].should.equal(JSON.stringify(expected).length.toString())
             })
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should not mung an error response (by default)', done => {
+    it('should not mung an error response (by default)', function(done) {
         let server = express()
             .use(mung.json(inspect))
-            .get('/', (req, res) => res.status(404).json({ a: 'a' }).end());
+            .get('/', (req, res) => res.status(404).json({ a: 'a' }).end())
         request(server)
             .get('/')
             .expect(404)
             .expect(res => {
-                res.body.should.not.have.property('inspected_by');
+                res.body.should.not.have.property('inspected_by')
             })
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should mung an error response when told to', done => {
+    it('should mung an error response when told to', function(done) {
         let server = express()
             .use(mung.json(inspect, { mungError: true }))
-            .get('/', (req, res) => res.status(404).json({ a: 'a' }).end());
+            .get('/', (req, res) => res.status(404).json({ a: 'a' }).end())
         request(server)
             .get('/')
             .expect(404)
             .expect(res => {
-                let expected = {a : 'a', 'inspected_by': 'me'};
-                res.body.should.eql(expected);
+                let expected = {a: 'a', 'inspected_by': 'me'}
+                res.body.should.eql(expected)
                 res.headers['content-length'].should.equal(JSON.stringify(expected).length.toString())
             })
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should return 204 on null JSON result', done => {
+    it('should return 204 on null JSON result', function(done) {
         let server = express()
             .use(mung.json(remove))
-            .get('/', (req, res) => res.status(200).json({ a: 'a' }));
+            .get('/', (req, res) => res.status(200).json({ a: 'a' }))
         request(server)
             .get('/')
             .expect(204)
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should return the munged JSON result from a res.send', done => {
+    it('should return the munged JSON result from a res.send', function(done) {
         let server = express()
             .use(mung.json(inspect))
-            .get('/', (req, res) => res.status(200).send({ a: 'a' }).end());
+            .get('/', (req, res) => res.status(200).send({ a: 'a' }).end())
         request(server)
             .get('/')
             .expect(200)
             .expect(res => {
-                let expected = {a : 'a', 'inspected_by': 'me'};
-                res.body.should.eql(expected);
+                let expected = {a: 'a', 'inspected_by': 'me'}
+                res.body.should.eql(expected)
                 res.headers['content-length'].should.equal(JSON.stringify(expected).length.toString())
             })
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should return a munged scalar result as text/plain', done => {
+    it('should return a munged scalar result as text/plain', function(done) {
         let server = express()
             .use(mung.json(reduce))
-            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end());
+            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end())
         request(server)
             .get('/')
             .expect(200)
             .expect(res => {
-                res.text.should.equal('a');
-                res.headers.should.have.property('content-type', 'text/plain; charset=utf-8');
+                res.text.should.equal('a')
+                res.headers.should.have.property('content-type', 'text/plain; charset=utf-8')
             })
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should return a munged number as text/plain', done => {
+    it('should return a munged number as text/plain', function(done) {
         let server = express()
             .use(mung.json(life))
-            .get('/', (req, res) => res.status(200).json("the meaning of life").end());
+            .get('/', (req, res) => res.status(200).json('the meaning of life').end())
         request(server)
             .get('/')
             .expect(200)
             .expect(res => {
-                res.text.should.equal('42');
-                res.headers.should.have.property('content-type', 'text/plain; charset=utf-8');
+                res.text.should.equal('42')
+                res.headers.should.have.property('content-type', 'text/plain; charset=utf-8')
             })
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should return a number as application/json', done => {
+    it('should return a number as application/json', function(done) {
         let server = express()
             .use(mung.json(noop))
-            .get('/', (req, res) => res.status(200).json(42).end());
+            .get('/', (req, res) => res.status(200).json(42).end())
         request(server)
             .get('/')
             .expect(200)
             .expect(res => {
-                res.text.should.equal('42');
-                res.headers.should.have.property('content-type', 'application/json; charset=utf-8');
+                res.text.should.equal('42')
+                res.headers.should.have.property('content-type', 'application/json; charset=utf-8')
             })
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should abort if a response is sent', done => {
+    it('should abort if a response is sent', function(done) {
         function error (json, req, res) {
             res.status(403).send('no permissions')
         }
         let server = express()
             .use(mung.json(error))
-            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end());
+            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end())
         request(server)
             .get('/')
             .expect(403)
             .expect(res => {
-                res.text.should.equal('no permissions');
-                res.headers.should.have.property('content-type', 'text/html; charset=utf-8');
+                res.text.should.equal('no permissions')
+                res.headers.should.have.property('content-type', 'text/html; charset=utf-8')
             })
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should 500 on a synchronous exception', done => {
+    it('should 500 on a synchronous exception', function(done) {
         let server = express()
             .use((err, req, res, next) => res.status(500).send(err.message).end())
             .use(mung.json(error))
-            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end());
+            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end())
         request(server)
             .get('/')
             .expect(500)
-            .end(done);
-    });
+            .end(done)
+    })
 
-    it('should 500 on an asynchronous exception', done => {
+    it('should 500 on an asynchronous exception', function(done) {
         let server = express()
             .use((err, req, res, next) => res.status(500).send(err.message).end())
             .use(mung.json(error))
             .get('/', (req, res) => {
                 process.nextTick(() => {
-                    res.status(200).json({ a: 'a' }).end();
-                });
-            });
+                    res.status(200).json({ a: 'a' }).end()
+                })
+            })
         request(server)
             .get('/')
             .expect(500)
-            .end(done);
-    });
-
+            .end(done)
+    })
 })

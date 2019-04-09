@@ -1,184 +1,184 @@
-'use strict';
-
-let mung = {};
-let faux_fin = { end: () => null };
+const Promise = require('bluebird')
+Promise.config({
+    // Enable warnings
+    warnings: true,
+    // Enable long stack traces
+    longStackTraces: true,
+    // Enable cancellation
+    cancellation: true,
+    // Enable monitoring
+    monitoring: true
+});
+process.on('unhandledRejection', error => {
+  // Will print "unhandledRejection err is not defined"
+  console.log('unhandledRejection', error.message, error.stack);
+});
+const mung = {}
+const fauxFin = { end: () => null }
 
 function isScalar(v) {
-    return typeof v !== 'object' && !Array.isArray(v);
+    return typeof v !== 'object' && !Array.isArray(v)
 }
 
 mung.onError = (err, req, res) => {
-    res
-        .status(500)
-        .set('content-language', 'en')
-        .json({ message: err.message })
-    res
-        .end();
-    return res;
-};
+    if (!res.headersSent) {
+        res
+            .status(500)
+            .set('content-language', 'en')
+            .json({ message: err.message })
+        res
+            .end()
+    }
+    return res
+}
 
-mung.json = function json (fn, options) {
+mung.json = function json (fn, options = {}) {
     return function (req, res, next) {
-        let original = res.json;
-        options = options || {};
-        let mungError = options.mungError;
+        const original = res.json
+        const mungError = options.mungError
 
-        function json_hook (json) {
-            let originalJson = json;
-            res.json = original;
-            if (res.headersSent)
-                return res;
-            if (!mungError && res.statusCode >= 400)
-                return original.call(this, json);
+        function jsonHook (json) {
+            let originalJson = json
+            res.json = original
+            if (res.headersSent) { return res }
+            if (!mungError && res.statusCode >= 400) { return original.call(this, json) }
 
             // Run the munger
             try {
-                json = fn(json, req, res);
+                json = fn(json, req, res)
             } catch (e) {
-                return mung.onError(e, req, res);
+                return mung.onError(e, req, res)
             }
-            if (res.headersSent)
-                return res;
+            if (res.headersSent) { return res }
 
             // If no returned value from fn, then assume json has been mucked with.
-            if (json === undefined)
-                json = originalJson;
+            if (json === undefined) { json = originalJson }
 
             // If null, then 204 No Content
-            if (json === null)
-                return res.status(204).end();
+            if (json === null) { return res.status(204).end() }
 
             // If munged scalar value, then text/plain
             if (originalJson !== json && isScalar(json)) {
-                res.set('content-type', 'text/plain');
-                return res.send(String(json));
+                res.set('content-type', 'text/plain')
+                return res.send(String(json))
             }
 
-            return original.call(this, json);
+            return original.call(this, json)
         }
-        res.json = json_hook;
+        res.json = jsonHook
 
-        next && next();
+        next && next()
     }
 }
 
-mung.jsonAsync = function json (fn, options) {
+mung.jsonAsync = function jsonAsync (fn, options = {}) {
     return function (req, res, next) {
-        let original = res.json;
-        options = options || {};
-        let mungError = options.mungError;
+        const original = res.json
+        const mungError = options.mungError
 
-        function json_async_hook (json) {
-            let originalJson = json;
-            res.json = original;
-            if (res.headersSent)
-                return;
-            if (!mungError && res.statusCode >= 400)
-                return original.call(this, json);
+        function jsonAsyncHook (json) {
+            let originalJson = json
+            res.json = original
+            if (res.headersSent) { return }
+            if (!mungError && res.statusCode >= 400) { return original.call(this, json) }
             try {
                 fn(json, req, res)
-                .then(json => {
-                    if (res.headersSent)
-                        return;
+                    .then(json => {
+                        if (res.headersSent) { return }
 
-                    // If null, then 204 No Content
-                    if (json === null)
-                        return res.status(204).end();
+                        // If null, then 204 No Content
+                        if (json === null) { return res.status(204).end() }
 
-                    // If munged scalar value, then text/plain
-                    if (json !== originalJson && isScalar(json)) {
-                        res.set('content-type', 'text/plain');
-                        return res.send(String(json));
-                    }
+                        // If munged scalar value, then text/plain
+                        if (json !== originalJson && isScalar(json)) {
+                            res.set('content-type', 'text/plain')
+                            return res.send(String(json))
+                        }
 
-                    return original.call(this, json);
-                })
-                .catch(e => mung.onError(e, req, res));
+                        return original.call(this, json)
+                    })
+                    .catch(e => mung.onError(e, req, res))
             } catch (e) {
-                mung.onError(e, req, res);
+                mung.onError(e, req, res)
             }
 
-            return faux_fin;
+            return fauxFin
         }
-        res.json = json_async_hook;
+        res.json = jsonAsyncHook
 
-        next && next();
+        next && next()
     }
 }
 
 mung.headers = function headers (fn) {
     return function (req, res, next) {
-        let original = res.end;
-        function headers_hook () {
-            res.end = original;
+        const original = res.end
+        function headersHook () {
+            res.end = original
             if (!res.headersSent) {
                 try {
-                    fn(req, res);
+                    fn(req, res)
                 } catch (e) {
-                    return mung.onError(e, req, res);
+                    return mung.onError(e, req, res)
                 }
                 if (res.headersSent) {
-                    console.error('sending response while in mung.headers is undefined behaviour');
-                    return;
+                    console.error('sending response while in mung.headers is undefined behaviour')
+                    return
                 }
             }
-            return original.apply(this, arguments);
+            return original.apply(this, arguments)
         }
-        res.end = headers_hook;
+        res.end = headersHook
 
-        next && next();
+        next && next()
     }
 }
 
 mung.headersAsync = function headersAsync (fn) {
     return function (req, res, next) {
-        let original = res.end;
+        let original = res.end
         let onError = e => {
-            res.end = original;
-            return mung.onError(e, req, res);
-        };
-        function headers_async_hook () {
-            if (res.headersSent)
-                return original.apply(this, args);
-            let args = arguments;
-            res.end = () => null;
+            res.end = original
+            return mung.onError(e, req, res)
+        }
+        function headersAsyncHook (...args) {
+            if (res.headersSent) { return original.apply(this, args) }
+            res.end = () => null
             try {
                 fn(req, res)
-                .then(() => {
-                    res.end = original;
-                    if (res.headersSent)
-                        return;
-                    original.apply(this, args);
-                })
-                .catch(e => onError(e, req, res));
+                    .then(() => {
+                        res.end = original
+                        if (res.headersSent) { return }
+                        original.apply(this, args)
+                    })
+                    .catch(e => onError(e, req, res))
             } catch (e) {
-                onError(e, req, res);
+                onError(e, req, res)
             }
         }
-        res.end = headers_async_hook;
+        res.end = headersAsyncHook
 
-        next && next();
+        next && next()
     }
 }
 
 mung.write = function write (fn, options = {}) {
     return function (req, res, next) {
-        const original = res.write;
-        const mungError = options.mungError;
+        const original = res.write
+        const mungError = options.mungError
 
-        function write_hook (chunk, encoding, callback) {
+        function writeHook (chunk, encoding, callback) {
             // If res.end has already been called, do nothing.
             if (res.finished) {
-                return false;
+                return false
             }
 
             // Do not mung on errors
             if (!mungError && res.statusCode >= 400) {
-                return original.apply(res, arguments);
+                return original.apply(res, arguments)
             }
 
             try {
-
                 let modifiedChunk = fn(
                     chunk,
                     // Since `encoding` is an optional argument to `res.write`,
@@ -186,93 +186,81 @@ mung.write = function write (fn, options = {}) {
                     typeof encoding === 'string' ? encoding : null,
                     req,
                     res
-                );
+                )
 
                 // res.finished is set to `true` once res.end has been called.
                 // If it is called in the mung function, stop execution here.
                 if (res.finished) {
-                    return false;
+                    return false
                 }
 
                 // If no returned value from fn, then set it back to the original value
                 if (modifiedChunk === undefined) {
-                    modifiedChunk = chunk;
+                    modifiedChunk = chunk
                 }
 
                 return original.call(res, modifiedChunk, encoding, callback)
-
             } catch (err) {
-                return mung.onError(err, req, res);
+                return mung.onError(err, req, res)
             }
         }
 
-        res.write = write_hook;
+        res.write = writeHook
         res.send = (...args) => {
-          write_hook(...args)
-          res.end()
+            writeHook(...args)
+            res.end()
         }
 
-        next && next();
+        next && next()
     }
 }
-
 
 mung.writeAsync = function write (fn, options = {}) {
     return function (req, res, next) {
-        let original = res.write;
-        const mungError = options.mungError;
+        const original = res.write
+        const mungError = options.mungError
 
-        function write_async_hook (chunk, encoding, callback) {
-          return new Promise((resolve, reject) => {
+        function writeAsyncHook (chunk, encoding, callback) {
             // If res.end has already been called, do nothing.
-            if (res.finished) {
-                return false;
-            }
+            if (res.headersSent) { return }
 
             // Do not mung on errors
             if (!mungError && res.statusCode >= 400) {
-                return original.apply(res, arguments);
+                return original.apply(res, arguments)
             }
 
             try {
-                fn(chunk,
-                // Since `encoding` is an optional argument to `res.write`,
-                // make sure it is a string and not actually the callback.
-                typeof encoding === 'string' ? encoding : null,
-                req,
-                res)
-                .then(modifiedChunk => {
-                    if (res.headersSent)
-                        return;
+                fn(
+                    chunk,
+                    // Since `encoding` is an optional argument to `res.write`,
+                    // make sure it is a string and not actually the callback.
+                    typeof encoding === 'string' ? encoding : null,
+                    req,
+                    res
+                ).then(modifiedChunk => {
+                    if (res.headersSent) { return }
 
-                        // If no returned value from fn, then set it back to the original value
-                        if (modifiedChunk === undefined) {
-                            modifiedChunk = chunk;
-                        }
+                    // If no returned value from fn, then set it back to the original value
+                    if (modifiedChunk === undefined) {
+                        modifiedChunk = chunk
+                    }
 
-                      resolve(original.call(res, modifiedChunk, encoding, callback))
-                })
-                .catch(e => mung.onError(e, req, res));
+                    return original.call(res, modifiedChunk, encoding, callback)
+                }).catch(e => { mung.onError(e, req, res) })
             } catch (e) {
-                mung.onError(e, req, res);
+                mung.onError(e, req, res)
             }
-          })
 
-
-
-
-
-
-          return faux_fin;
+            return fauxFin
         }
 
-        res.write = write_async_hook;
+        res.write = writeAsyncHook
         res.send = (...args) => {
-          write_async_hook(...args).then(() => res.end())
+            writeAsyncHook(...args).then(() => res.end())
         }
 
-        next && next();
+        next && next()
     }
 }
 
-module.exports = mung;
+module.exports = mung
