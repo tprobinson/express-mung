@@ -63,4 +63,30 @@ describe('mung headers', function () {
             .expect(500)
             .end(done)
     })
+
+    it('should 500 on a synchronous exception with async method', function(done) {
+        function error (req, res) {
+            req.hopefully_fails()
+        }
+        const server = express()
+            .use(mung.headersAsync(error))
+            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end())
+        request(server)
+            .get('/')
+            .expect(500)
+            .end(done)
+    })
+
+    it('should do nothing when headers are sent in munge', function(done) {
+        function sendHeaders (req, res) {
+            res.send({ message: 'oops' })
+        }
+        const server = express()
+            .use(mung.headers(sendHeaders))
+            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end())
+        request(server)
+            .get('/')
+            .expect(200)
+            .end(done)
+    })
 })

@@ -25,6 +25,9 @@ describe('mung write', function() {
         }
     }
 
+    function noop (chunk, encoding, req, res) {
+    }
+
     function error (chunk, encoding, req, res) {
         chunk.foo.bar.hopefully.fails()
     }
@@ -46,6 +49,40 @@ describe('mung write', function() {
             .expect(200)
             .expect(res => {
                 res.text.should.eql(modifiedResponseTextBody)
+            })
+            .end(done)
+    })
+
+    it('should return the munged text result with encoding', function(done) {
+        const server = express()
+            .use(mung.write(appendText))
+            .get('/', (req, res) => {
+                res.status(200)
+                    .write(originalResponseTextBody, 'utf-8')
+                res.end()
+            })
+        request(server)
+            .get('/')
+            .expect(200)
+            .expect(res => {
+                res.text.should.eql(modifiedResponseTextBody)
+            })
+            .end(done)
+    })
+
+    it('should return the same thing when no munge happens', function(done) {
+        const server = express()
+            .use(mung.write(noop))
+            .get('/', (req, res) => {
+                res.status(200)
+                    .write(originalResponseTextBody)
+                res.end()
+            })
+        request(server)
+            .get('/')
+            .expect(200)
+            .expect(res => {
+                res.text.should.eql(originalResponseTextBody)
             })
             .end(done)
     })
@@ -110,6 +147,22 @@ describe('mung write', function() {
             .get('/', (req, res) => {
                 res.set('Content-Type', 'application/json')
                     .status(200)
+                    .write(originalResponseTextBody)
+                res.end()
+            })
+        request(server)
+            .get('/')
+            .expect(403)
+            .end(done)
+    })
+
+    it('should abort if a response is sent before the munge', function(done) {
+        const server = express()
+            .use(mung.write(noop))
+            .get('/', (req, res) => {
+                res.set('Content-Type', 'application/json')
+                    .status(403)
+                    .send({ message: 'oops' })
                     .write(originalResponseTextBody)
                 res.end()
             })

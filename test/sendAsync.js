@@ -25,11 +25,18 @@ describe('mung sendAsync', function() {
         }
     }
 
-    async function error (chunk, req, res) {
+    async function noop (chunk, req, res) {
+    }
+
+    function error (chunk, req, res) {
         chunk.foo.bar.hopefully.fails()
     }
 
-    async function error403 (chunk, req, res) {
+    async function errorAsync (chunk, req, res) {
+        chunk.foo.bar.hopefully.fails()
+    }
+
+    async function error403Async (chunk, req, res) {
         res.status(403).json({ foo: 'bar ' })
     }
 
@@ -45,6 +52,22 @@ describe('mung sendAsync', function() {
             .expect(200)
             .expect(res => {
                 res.text.should.eql(modifiedResponseTextBody)
+            })
+            .end(done)
+    })
+
+    it('should return the same thing when no munge happens', function(done) {
+        const server = express()
+            .use(mung.sendAsync(noop))
+            .get('/', (req, res) => {
+                res.status(200)
+                    .send(originalResponseTextBody)
+            })
+        request(server)
+            .get('/')
+            .expect(200)
+            .expect(res => {
+                res.text.should.eql(originalResponseTextBody)
             })
             .end(done)
     })
@@ -102,7 +125,7 @@ describe('mung sendAsync', function() {
 
     it('should abort if a response is sent', function(done) {
         const server = express()
-            .use(mung.sendAsync(error403))
+            .use(mung.sendAsync(error403Async))
             .get('/', (req, res) => {
                 res.set('Content-Type', 'application/json')
                     .status(200)
@@ -111,6 +134,21 @@ describe('mung sendAsync', function() {
         request(server)
             .get('/')
             .expect(403)
+            .end(done)
+    })
+
+    it('should do nothing if a response is sent before munge', function(done) {
+        const server = express()
+            .use(mung.sendAsync(inspectJson))
+            .get('/', (req, res) => {
+                res.set('Content-Type', 'application/json')
+                    .status(200)
+                    .write('{"message": "oops"}')
+                res.end()
+            })
+        request(server)
+            .get('/')
+            .expect(200)
             .end(done)
     })
 
@@ -132,7 +170,7 @@ describe('mung sendAsync', function() {
     it('should 500 on an asynchronous exception', function(done) {
         const server = express()
             .use((err, req, res, next) => res.status(500).send(err.message).end())
-            .use(mung.sendAsync(error))
+            .use(mung.sendAsync(errorAsync))
             .get('/', (req, res) => {
                 process.nextTick(() => {
                     res.set('Content-Type', 'application/json')

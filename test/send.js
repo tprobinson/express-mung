@@ -24,6 +24,8 @@ describe('mung send', function() {
             throw e
         }
     }
+    function noop (chunk, req, res) {
+    }
 
     function error (chunk, req, res) {
         chunk.foo.bar.hopefully.fails()
@@ -45,6 +47,22 @@ describe('mung send', function() {
             .expect(200)
             .expect(res => {
                 res.text.should.eql(modifiedResponseTextBody)
+            })
+            .end(done)
+    })
+
+    it('should return the same thing when no munge happens', function(done) {
+        const server = express()
+            .use(mung.send(noop))
+            .get('/', (req, res) => {
+                res.status(200)
+                    .send(originalResponseTextBody)
+            })
+        request(server)
+            .get('/')
+            .expect(200)
+            .expect(res => {
+                res.text.should.eql(originalResponseTextBody)
             })
             .end(done)
     })

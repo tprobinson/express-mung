@@ -25,8 +25,17 @@ describe('mung jsonAsync', function() {
         return 42
     }
 
-    async function error(json, req, res) {
+    function error (json, req, res) {
         return json.foo.bar.hopefully.fails()
+    }
+
+    async function errorAsync (json, req, res) {
+        return json.foo.bar.hopefully.fails()
+    }
+
+    async function error403Async (json, req, res) {
+        res.status(403).send('no permissions')
+        return json
     }
 
     it('should return the munged JSON result', function(done) {
@@ -125,12 +134,8 @@ describe('mung jsonAsync', function() {
     })
 
     it('should abort if a response is sent', function(done) {
-        async function error (json, req, res) {
-            res.status(403).send('no permissions')
-            return json
-        }
         const server = express()
-            .use(mung.jsonAsync(error))
+            .use(mung.jsonAsync(error403Async))
             .get('/', (req, res) => res.status(200).json({ a: 'a' }).end())
         request(server)
             .get('/')
@@ -143,6 +148,17 @@ describe('mung jsonAsync', function() {
     })
 
     it('should 500 on an exception', function(done) {
+        const server = express()
+            .use((err, req, res, next) => res.status(501).send(err.message).end())
+            .use(mung.jsonAsync(errorAsync))
+            .get('/', (req, res) => res.status(200).json({ a: 'a' }).end())
+        request(server)
+            .get('/')
+            .expect(500)
+            .end(done)
+    })
+
+    it('should 500 on a synchronous exception', function(done) {
         const server = express()
             .use((err, req, res, next) => res.status(501).send(err.message).end())
             .use(mung.jsonAsync(error))
